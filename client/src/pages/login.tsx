@@ -115,7 +115,7 @@ export default function Login() {
                     <Checkbox
                       id="remember"
                       checked={rememberMe}
-                      onCheckedChange={setRememberMe}
+                      onCheckedChange={(checked) => setRememberMe(!!checked)}
                       className="focus:ring-cush-blue-500"
                     />
                     <Label htmlFor="remember" className="text-sm text-gray-600">
@@ -146,6 +146,7 @@ export default function Login() {
               <Button
                 variant="link"
                 className="text-cush-blue-600 hover:text-cush-blue-700 font-medium p-0"
+                onClick={() => navigate("/register")}
               >
                 Sign up
               </Button>

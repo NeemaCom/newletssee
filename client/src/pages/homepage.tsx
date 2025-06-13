@@ -29,7 +29,7 @@ export default function Homepage() {
                   Sign In
                 </Button>
               </Link>
-              <Link href="/dashboard">
+              <Link href="/register">
                 <Button className="bg-cush-blue-600 hover:bg-cush-blue-700 text-white font-medium">
                   Get Started
                 </Button>
