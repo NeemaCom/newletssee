@@ -2,17 +2,41 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import session from "express-session";
 import { storage } from "./storage";
-import { insertUserSchema, loginSchema } from "@shared/schema";
-import bcrypt from "bcrypt";
+import { 
+  registerSchema, 
+  loginSchema, 
+  updateProfileSchema,
+  passwordRecoverySchema,
+  resetPasswordSchema,
+  type RegisterForm,
+  type LoginForm,
+  type UpdateProfileForm
+} from "@shared/schema";
+import { 
+  EncryptionService, 
+  SecurityLogger, 
+  authRateLimit, 
+  generalRateLimit,
+  sanitizeRequest,
+  validatePasswordStrength,
+  isValidEmail 
+} from "./security";
+import { 
+  isAuthenticated, 
+  requireAdmin, 
+  requireCustomer,
+  createSafeUser,
+  type AuthenticatedRequest 
+} from "./auth";
 import { z } from "zod";
 
-declare module "express-session" {
-  interface SessionData {
-    userId?: number;
-  }
-}
-
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Apply global rate limiting
+  app.use(generalRateLimit);
+  
+  // Apply input sanitization
+  app.use(sanitizeRequest);
+
   // Session configuration
   app.use(
     session({
@@ -22,121 +46,433 @@ export async function registerRoutes(app: Express): Promise<Server> {
       cookie: {
         secure: process.env.NODE_ENV === "production",
         httpOnly: true,
-        maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+        maxAge: 1000 * 60 * 60 * 24, // 24 hours
+        sameSite: 'strict',
       },
     })
   );
 
-  // Authentication middleware
-  const requireAuth = (req: any, res: any, next: any) => {
-    if (!req.session.userId) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
-    next();
-  };
-
-  // Auth routes
-  app.post("/api/auth/register", async (req, res) => {
+  // Enhanced registration endpoint
+  app.post("/api/auth/signup", authRateLimit, async (req: AuthenticatedRequest, res) => {
     try {
-      const userData = insertUserSchema.parse(req.body);
+      const userData = registerSchema.parse(req.body);
       
-      // Check if user exists
-      const existingUser = await storage.getUserByUsername(userData.username);
-      if (existingUser) {
-        return res.status(400).json({ message: "Username already exists" });
+      // Check password strength
+      const passwordCheck = validatePasswordStrength(userData.password);
+      if (!passwordCheck.isValid) {
+        await SecurityLogger.logAuthEvent(
+          'weak_password_attempt',
+          null,
+          false,
+          req.ip,
+          req.get('User-Agent'),
+          { errors: passwordCheck.errors }
+        );
+        return res.status(400).json({ 
+          error: "Password does not meet security requirements",
+          details: passwordCheck.errors 
+        });
+      }
+
+      // Check if user exists by username or email
+      const [existingUsername, existingEmail] = await Promise.all([
+        storage.getUserByUsername(userData.username),
+        storage.getUserByEmail(userData.email)
+      ]);
+
+      if (existingUsername) {
+        await SecurityLogger.logAuthEvent(
+          'duplicate_username_attempt',
+          null,
+          false,
+          req.ip,
+          req.get('User-Agent'),
+          { username: userData.username }
+        );
+        return res.status(400).json({ error: "Username already exists" });
+      }
+
+      if (existingEmail) {
+        await SecurityLogger.logAuthEvent(
+          'duplicate_email_attempt',
+          null,
+          false,
+          req.ip,
+          req.get('User-Agent'),
+          { email: userData.email }
+        );
+        return res.status(400).json({ error: "Email already exists" });
       }
 
       // Hash password
-      const hashedPassword = await bcrypt.hash(userData.password, 10);
+      const hashedPassword = await EncryptionService.hashPassword(userData.password);
       
       // Create user
       const user = await storage.createUser({
-        ...userData,
-        password: hashedPassword,
+        username: userData.username,
+        email: userData.email,
+        passwordHash: hashedPassword,
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        phoneNumber: userData.phoneNumber || null,
+        nationality: userData.nationality || null,
+        acceptTerms: userData.acceptTerms,
+        acceptPrivacy: userData.acceptPrivacy,
+        marketingConsent: userData.marketingConsent || false,
       });
 
       // Create default accounts
-      await storage.createAccount({
-        userId: user.id,
-        name: "Current Account",
-        type: "current",
-        balance: "2340.50",
-      });
+      await Promise.all([
+        storage.createAccount({
+          userId: user.id,
+          name: "Current Account",
+          type: "current",
+          balance: "0.00",
+        }),
+        storage.createAccount({
+          userId: user.id,
+          name: "Savings Account", 
+          type: "savings",
+          balance: "0.00",
+        })
+      ]);
 
-      await storage.createAccount({
-        userId: user.id,
-        name: "Savings Account",
-        type: "savings",
-        balance: "6700.00",
-      });
+      // Log successful registration
+      await SecurityLogger.logAuthEvent(
+        'user_registration',
+        user.id,
+        true,
+        req.ip,
+        req.get('User-Agent'),
+        { username: user.username, email: user.email }
+      );
 
-      await storage.createAccount({
-        userId: user.id,
-        name: "Investment Account",
-        type: "investment",
-        balance: "12450.75",
-      });
-
+      // Set session
       req.session.userId = user.id;
-      res.json({ id: user.id, username: user.username, name: user.name, email: user.email });
+      req.session.role = user.role;
+      req.session.lastActivity = Date.now();
+
+      const safeUser = createSafeUser(user);
+      res.status(201).json(safeUser);
     } catch (error) {
       console.error("Registration error:", error);
+      await SecurityLogger.logAuthEvent(
+        'registration_error',
+        null,
+        false,
+        req.ip,
+        req.get('User-Agent'),
+        { error: error instanceof Error ? error.message : 'Unknown error' }
+      );
+      
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid input data" });
+        return res.status(400).json({ 
+          error: "Invalid input data",
+          details: error.errors.map(e => e.message)
+        });
       }
-      res.status(500).json({ message: "Registration failed" });
+      res.status(500).json({ error: "Registration failed" });
     }
   });
 
-  app.post("/api/auth/login", async (req, res) => {
+  // Enhanced login endpoint
+  app.post("/api/auth/signin", authRateLimit, async (req: AuthenticatedRequest, res) => {
     try {
       const { username, password } = loginSchema.parse(req.body);
       
       const user = await storage.getUserByUsername(username);
       if (!user) {
-        return res.status(401).json({ message: "Invalid credentials" });
+        await SecurityLogger.logAuthEvent(
+          'login_attempt',
+          null,
+          false,
+          req.ip,
+          req.get('User-Agent'),
+          { username, reason: 'user_not_found' }
+        );
+        return res.status(401).json({ error: "Invalid credentials" });
       }
 
-      const isValid = await bcrypt.compare(password, user.password);
+      const isValid = await EncryptionService.verifyPassword(password, user.passwordHash);
       if (!isValid) {
-        return res.status(401).json({ message: "Invalid credentials" });
+        await SecurityLogger.logAuthEvent(
+          'login_attempt',
+          user.id,
+          false,
+          req.ip,
+          req.get('User-Agent'),
+          { username, reason: 'invalid_password' }
+        );
+        return res.status(401).json({ error: "Invalid credentials" });
       }
 
+      // Update last login time
+      await storage.updateUser(user.id, { lastLoginAt: new Date() });
+
+      // Set session
       req.session.userId = user.id;
-      res.json({ id: user.id, username: user.username, name: user.name, email: user.email });
+      req.session.role = user.role;
+      req.session.lastActivity = Date.now();
+
+      // Log successful login
+      await SecurityLogger.logAuthEvent(
+        'login_success',
+        user.id,
+        true,
+        req.ip,
+        req.get('User-Agent'),
+        { username }
+      );
+
+      const safeUser = createSafeUser(user);
+      res.json(safeUser);
     } catch (error) {
       console.error("Login error:", error);
+      await SecurityLogger.logAuthEvent(
+        'login_error',
+        null,
+        false,
+        req.ip,
+        req.get('User-Agent'),
+        { error: error instanceof Error ? error.message : 'Unknown error' }
+      );
+      
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid input data" });
+        return res.status(400).json({ error: "Invalid input data" });
       }
-      res.status(500).json({ message: "Login failed" });
+      res.status(500).json({ error: "Login failed" });
     }
   });
 
-  app.post("/api/auth/logout", (req, res) => {
+  // Enhanced logout endpoint
+  app.post("/api/auth/logout", async (req: AuthenticatedRequest, res) => {
+    const userId = req.session.userId;
+    
     req.session.destroy((err) => {
       if (err) {
-        return res.status(500).json({ message: "Logout failed" });
+        SecurityLogger.logAuthEvent(
+          'logout_error',
+          userId || null,
+          false,
+          req.ip,
+          req.get('User-Agent'),
+          { error: err.message }
+        );
+        return res.status(500).json({ error: "Logout failed" });
       }
+      
+      SecurityLogger.logAuthEvent(
+        'logout_success',
+        userId || null,
+        true,
+        req.ip,
+        req.get('User-Agent')
+      );
+      
       res.json({ message: "Logged out successfully" });
     });
   });
 
-  app.get("/api/auth/me", requireAuth, async (req, res) => {
+  // Get current user endpoint
+  app.get("/api/auth/me", isAuthenticated, async (req: AuthenticatedRequest, res) => {
+    res.json(req.user);
+  });
+
+  // Password recovery endpoint
+  app.post("/api/auth/recover-password", authRateLimit, async (req: AuthenticatedRequest, res) => {
     try {
-      const user = await storage.getUser(req.session.userId!);
+      const { email } = passwordRecoverySchema.parse(req.body);
+      
+      const user = await storage.getUserByEmail(email);
       if (!user) {
-        return res.status(404).json({ message: "User not found" });
+        // Don't reveal if email exists or not for security
+        await SecurityLogger.logAuthEvent(
+          'password_recovery_attempt',
+          null,
+          false,
+          req.ip,
+          req.get('User-Agent'),
+          { email, reason: 'user_not_found' }
+        );
+        return res.json({ message: "If the email exists, a recovery link has been sent" });
       }
-      res.json({ id: user.id, username: user.username, name: user.name, email: user.email });
+
+      // Generate secure reset token
+      const resetToken = EncryptionService.generateSecureToken();
+      const resetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+      await storage.updateUser(user.id, {
+        passwordResetToken: resetToken,
+        passwordResetExpires: resetExpires,
+      });
+
+      await SecurityLogger.logAuthEvent(
+        'password_recovery_initiated',
+        user.id,
+        true,
+        req.ip,
+        req.get('User-Agent'),
+        { email }
+      );
+
+      // In production, send email with reset link
+      console.log(`Password reset token for ${email}: ${resetToken}`);
+      
+      res.json({ message: "If the email exists, a recovery link has been sent" });
     } catch (error) {
-      console.error("Get user error:", error);
-      res.status(500).json({ message: "Failed to get user" });
+      console.error("Password recovery error:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid email format" });
+      }
+      res.status(500).json({ error: "Password recovery failed" });
+    }
+  });
+
+  // Reset password endpoint
+  app.post("/api/auth/reset-password", authRateLimit, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { token, password } = resetPasswordSchema.parse(req.body);
+      
+      const user = await storage.getUserByResetToken(token);
+      if (!user || !user.passwordResetExpires || user.passwordResetExpires < new Date()) {
+        await SecurityLogger.logAuthEvent(
+          'invalid_reset_token',
+          null,
+          false,
+          req.ip,
+          req.get('User-Agent'),
+          { token }
+        );
+        return res.status(400).json({ error: "Invalid or expired reset token" });
+      }
+
+      // Check password strength
+      const passwordCheck = validatePasswordStrength(password);
+      if (!passwordCheck.isValid) {
+        return res.status(400).json({ 
+          error: "Password does not meet security requirements",
+          details: passwordCheck.errors 
+        });
+      }
+
+      const hashedPassword = await EncryptionService.hashPassword(password);
+      
+      await storage.updateUser(user.id, {
+        passwordHash: hashedPassword,
+        passwordResetToken: null,
+        passwordResetExpires: null,
+      });
+
+      await SecurityLogger.logAuthEvent(
+        'password_reset_success',
+        user.id,
+        true,
+        req.ip,
+        req.get('User-Agent')
+      );
+
+      res.json({ message: "Password reset successfully" });
+    } catch (error) {
+      console.error("Password reset error:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid input data" });
+      }
+      res.status(500).json({ error: "Password reset failed" });
+    }
+  });
+
+  // User profile endpoints
+  app.get("/api/profile", isAuthenticated, async (req: AuthenticatedRequest, res) => {
+    res.json(req.user);
+  });
+
+  app.put("/api/profile", isAuthenticated, async (req: AuthenticatedRequest, res) => {
+    try {
+      const updates = updateProfileSchema.parse(req.body);
+      const userId = req.userId!;
+      
+      const updatedUser = await storage.updateUser(userId, updates);
+      
+      await SecurityLogger.logAuthEvent(
+        'profile_update',
+        userId,
+        true,
+        req.ip,
+        req.get('User-Agent'),
+        { updatedFields: Object.keys(updates) }
+      );
+
+      const safeUser = createSafeUser(updatedUser);
+      res.json(safeUser);
+    } catch (error) {
+      console.error("Profile update error:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: "Invalid input data",
+          details: error.errors.map(e => e.message)
+        });
+      }
+      res.status(500).json({ error: "Profile update failed" });
+    }
+  });
+
+  // MFA endpoints
+  app.post("/api/mfa/enable", isAuthenticated, async (req: AuthenticatedRequest, res) => {
+    try {
+      const userId = req.userId!;
+      
+      // Generate backup codes
+      const backupCodes = EncryptionService.generateMFABackupCodes();
+      
+      await storage.updateUser(userId, {
+        mfaEnabled: true,
+        mfaBackupCodes: backupCodes,
+      });
+
+      await SecurityLogger.logAuthEvent(
+        'mfa_enabled',
+        userId,
+        true,
+        req.ip,
+        req.get('User-Agent')
+      );
+
+      res.json({ 
+        message: "MFA enabled successfully",
+        backupCodes: backupCodes
+      });
+    } catch (error) {
+      console.error("MFA enable error:", error);
+      res.status(500).json({ error: "Failed to enable MFA" });
+    }
+  });
+
+  app.post("/api/mfa/disable", isAuthenticated, async (req: AuthenticatedRequest, res) => {
+    try {
+      const userId = req.userId!;
+      
+      await storage.updateUser(userId, {
+        mfaEnabled: false,
+        mfaBackupCodes: null,
+      });
+
+      await SecurityLogger.logAuthEvent(
+        'mfa_disabled',
+        userId,
+        true,
+        req.ip,
+        req.get('User-Agent')
+      );
+
+      res.json({ message: "MFA disabled successfully" });
+    } catch (error) {
+      console.error("MFA disable error:", error);
+      res.status(500).json({ error: "Failed to disable MFA" });
     }
   });
 
   // Dashboard data
-  app.get("/api/dashboard", requireAuth, async (req, res) => {
+  app.get("/api/dashboard", isAuthenticated, async (req: AuthenticatedRequest, res) => {
     try {
       const userId = req.session.userId!;
       const user = await storage.getUser(userId);

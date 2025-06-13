@@ -1,0 +1,53 @@
+Implement the core user management system for Cush, including user roles, secure registration, login, profile management, and multi-factor authentication (MFA).
+
+Core Requirements:
+User Roles & Data Model:
+
+Define two primary User Roles: Admin and Customer.
+
+Design a database schema for User (using Drizzle ORM) including fields for id, email, passwordHash (securely stored), role, firstName, lastName, phoneNumber, nationality, isEmailVerified, isPhoneVerified, acceptTerms, acceptPrivacy, marketingConsent, createdAt, updatedAt, and mfaEnabled.
+
+Secure Authentication System:
+
+Implement secure registration API (POST /api/auth/signup) with input validation (email format, password strength, required fields).
+
+Implement secure login API (POST /api/auth/signin) with robust password verification (using bcrypt for hashing/comparison).
+
+Implement logout API (GET/POST /api/auth/logout) that effectively destroys sessions.
+
+Implement password recovery API (POST /api/auth/recover-password) using secure, temporary password generation (for dev) and a placeholder for email delivery.
+
+Integrate express-session for session management.
+
+Implement Rate Limiting (using express-rate-limit) on all authentication endpoints to prevent brute-force attacks.
+
+User Profile Management:
+
+Create APIs for fetching (GET /api/profile) and updating (PUT /api/profile) authenticated user profiles. Ensure sensitive data (like passwordHash) is never exposed.
+
+Multi-Factor Authentication (MFA) Integration:
+
+Implement API endpoints for enabling (POST /api/mfa/enable) and disabling (POST /api/mfa/disable) MFA. Include placeholders for backup code generation/storage.
+
+Implement a middleware (isAuthenticated or similar) to protect routes requiring authentication, ensuring req.session.userId is present.
+
+Security Best Practices:
+
+Ensure all password handling uses strong, one-way hashing (e.g., bcrypt).
+
+Implement input validation and sanitization middleware for all incoming requests (using Zod for schema validation where applicable).
+
+Audit Logging: Log all successful and failed authentication attempts and critical user profile modifications.
+
+Expected Deliverables:
+backend/src/db/schema.ts: Updated Drizzle schema for User model.
+
+backend/src/types/index.ts: Definitive TypeScript interfaces for User, SessionData, and AuthenticatedRequest.
+
+backend/src/auth.ts: Middleware (isAuthenticated) and helper functions (getUserId, getCurrentUser).
+
+backend/src/security.ts: EncryptionService for password hashing/verification, securityLogger for audit events, authRateLimit middleware, and sanitizeInput function.
+
+backend/src/routes.ts: (Or similar main route file) Integration of authentication APIs (/api/auth/signup, /api/auth/signin, /api/auth/logout, /api/auth/recover-password, /api/mfa/enable, /api/mfa/disable) and user profile APIs (/api/profile).
+
+Frontend (Conceptual): Notes on required login, registration, and profile editing forms.
