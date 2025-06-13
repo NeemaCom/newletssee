@@ -1,0 +1,63 @@
+Initiate the Cush platform project. Establish the core directory structure for both frontend and backend, set up foundational configuration files, and implement initial, enterprise-grade security measures at an architectural level.
+
+Core Requirements:
+Project Setup:
+
+Create a monorepo-like structure with distinct frontend (React/Next.js) and backend (Node.js/TypeScript) directories.
+
+Initialize package.json with essential dependencies and scripts for both frontend and backend.
+
+Configure tsconfig.json for both environments, ensuring strict type checking and modern compilation targets.
+
+Implement initial Drizzle ORM setup for the backend, connecting to a PostgreSQL database (placeholder for actual connection details).
+
+Establish basic server (Express.js) and client (React/Next.js) application entry points.
+
+Security Foundation:
+
+Implement environment variable management for all sensitive keys (e.g., database credentials, API keys, session secrets) – no hardcoding.
+
+Integrate Helmet.js (or equivalent) for setting essential security HTTP headers (CSP, HSTS, X-XSS-Protection, etc.).
+
+Set up CORS (Cross-Origin Resource Sharing) configuration appropriate for development and production environments.
+
+Include a placeholder for Web Application Firewall (WAF) and DDoS protection in the architectural notes (actual implementation is infra-level, but the prompt ensures it's considered).
+
+Design all data handling with encryption principles in mind (e.g., plan for encryption at rest for sensitive database fields, TLS 1.3 for all in-transit data).
+
+Expected Deliverables:
+Project Directory Structure:
+
+/cush-platform
+├── frontend/
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── src/
+│       └── main.tsx (React/Next.js entry)
+├── backend/
+│   ├── package.json
+│   ├── tsconfig.json
+│   ├── src/
+│   │   ├── index.ts (Express server entry)
+│   │   ├── db.ts (Drizzle DB connection setup)
+│   │   ├── schema/ (Drizzle schema definitions - initial empty file)
+│   │   ├── security/ (placeholder for security services)
+│   │   └── types/ (placeholder for global types)
+├── .env.example (template for environment variables)
+└── README.md (basic setup instructions)
+
+backend/package.json: Minimum dependencies for Express, TypeScript, Drizzle ORM, Helmet, Express-Session, Zod, and related @types.
+
+backend/tsconfig.json: Configured for Node.js backend with strict typing.
+
+frontend/package.json: Minimum dependencies for React/Next.js, TypeScript, and related @types.
+
+frontend/tsconfig.json: Configured for React/Next.js frontend.
+
+backend/src/index.ts: Basic Express server initialization with Helmet.js applied and CORS enabled.
+
+backend/src/db.ts: Placeholder for PostgreSQL connection using Drizzle ORM.
+
+backend/src/security/index.ts: Placeholder file for security-related exports (e.g., helmet, rate limits).
+
+Initial README.md outlining how to set up and run the project (backend and frontend).
