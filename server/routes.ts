@@ -474,31 +474,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Dashboard data
   app.get("/api/dashboard", isAuthenticated, async (req: AuthenticatedRequest, res) => {
     try {
-      const userId = req.session.userId!;
-      const user = await storage.getUser(userId);
+      const userId = req.userId!;
+      const user = req.user!;
       const accounts = await storage.getAccountsByUserId(userId);
       const recentTransactions = await storage.getRecentTransactions(userId, 10);
-      
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
 
       // Calculate totals
-      const totalBalance = accounts.reduce((sum, account) => sum + parseFloat(account.balance), 0);
-      const currentAccount = accounts.find(a => a.type === "current");
-      const savingsAccount = accounts.find(a => a.type === "savings");
-      const investmentAccount = accounts.find(a => a.type === "investment");
+      const totalBalance = accounts.reduce((sum: number, account: any) => sum + parseFloat(account.balance), 0);
+      const currentAccount = accounts.find((a: any) => a.type === "current");
+      const savingsAccount = accounts.find((a: any) => a.type === "savings");
+      const investmentAccount = accounts.find((a: any) => a.type === "investment");
 
-      // Calculate monthly stats (mock data for now)
-      const monthlyIncome = 2520.00;
-      const monthlyExpenses = 1850.00;
+      // Calculate monthly stats from transactions
+      const monthlyIncome = recentTransactions
+        .filter((t: any) => t.type === 'income')
+        .reduce((sum: number, t: any) => sum + parseFloat(t.amount), 0);
+      const monthlyExpenses = recentTransactions
+        .filter((t: any) => t.type === 'expense')
+        .reduce((sum: number, t: any) => sum + parseFloat(t.amount), 0);
       const monthlySavings = monthlyIncome - monthlyExpenses;
 
       const dashboardData = {
         user: {
-          name: user.name,
+          name: `${user.firstName} ${user.lastName}`,
           email: user.email,
-          initials: user.name.split(' ').map(n => n[0]).join('').toUpperCase(),
+          initials: `${user.firstName[0]}${user.lastName[0]}`.toUpperCase(),
         },
         accounts: {
           current: parseFloat(currentAccount?.balance || "0"),
@@ -530,58 +530,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Balance history
-  app.get("/api/balance-history", requireAuth, async (req, res) => {
+  app.get("/api/balance-history", isAuthenticated, async (req: AuthenticatedRequest, res) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const history = await storage.getBalanceHistory(userId);
       
-      // If no history, return mock data
-      if (history.length === 0) {
-        const mockData = [
-          { period: "Jan", balance: 1200 },
-          { period: "Feb", balance: 1350 },
-          { period: "Mar", balance: 1280 },
-          { period: "Apr", balance: 1420 },
-          { period: "May", balance: 1380 },
-          { period: "Jun", balance: 1500 },
-          { period: "Jul", balance: 1320 },
-        ];
-        return res.json(mockData);
-      }
-
+      // If no history, return empty array (let frontend handle empty state)
       res.json(history);
     } catch (error) {
       console.error("Balance history error:", error);
-      res.status(500).json({ message: "Failed to load balance history" });
+      res.status(500).json({ error: "Failed to load balance history" });
     }
   });
 
   // Recent transactions
-  app.get("/api/transactions/recent", requireAuth, async (req, res) => {
+  app.get("/api/transactions/recent", isAuthenticated, async (req: AuthenticatedRequest, res) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const transactions = await storage.getRecentTransactions(userId, 10);
       res.json(transactions);
     } catch (error) {
       console.error("Recent transactions error:", error);
-      res.status(500).json({ message: "Failed to load transactions" });
+      res.status(500).json({ error: "Failed to load transactions" });
     }
   });
 
   // Create transaction
-  app.post("/api/transactions", requireAuth, async (req, res) => {
+  app.post("/api/transactions", isAuthenticated, async (req: AuthenticatedRequest, res) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const transactionData = {
         ...req.body,
         userId,
       };
       
       const transaction = await storage.createTransaction(transactionData);
+      
+      await SecurityLogger.logAuthEvent(
+        'transaction_created',
+        userId,
+        true,
+        req.ip,
+        req.get('User-Agent'),
+        { transactionId: transaction.id, amount: transaction.amount, type: transaction.type }
+      );
+      
       res.json(transaction);
     } catch (error) {
       console.error("Create transaction error:", error);
-      res.status(500).json({ message: "Failed to create transaction" });
+      res.status(500).json({ error: "Failed to create transaction" });
     }
   });
 
