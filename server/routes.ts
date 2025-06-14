@@ -29,6 +29,8 @@ import {
   type AuthenticatedRequest 
 } from "./auth";
 import { z } from "zod";
+import { geminiService, type UserContext } from "./gemini-service";
+import rateLimit from "express-rate-limit";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Apply global rate limiting
@@ -579,6 +581,193 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Create transaction error:", error);
       res.status(500).json({ error: "Failed to create transaction" });
+    }
+  });
+
+  // Imisi 2.0 AI Assistant API endpoints
+  const chatMessageSchema = z.object({
+    message: z.string().min(1, "Message cannot be empty").max(1000, "Message too long"),
+    sessionId: z.string().optional(),
+  });
+
+  // AI assistant rate limit - more restrictive for AI calls
+  const aiRateLimit = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 20, // limit each IP to 20 AI requests per window
+    message: { error: "Too many AI assistant requests, please try again later." },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  // Chat with Imisi 2.0
+  app.post("/api/imisi/chat", isAuthenticated, aiRateLimit, async (req: AuthenticatedRequest, res) => {
+    try {
+      const userId = req.userId!;
+      const { message, sessionId } = chatMessageSchema.parse(req.body);
+
+      // Build comprehensive user context for personalized AI responses
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const [accounts, recentTransactions, balanceHistory] = await Promise.all([
+        storage.getAccountsByUserId(userId),
+        storage.getRecentTransactions(userId, 10),
+        storage.getBalanceHistory(userId)
+      ]);
+
+      const currentBalance = accounts.reduce((sum, acc) => sum + parseFloat(acc.balance || "0"), 0);
+      const monthlyIncome = recentTransactions
+        .filter(t => t.type === 'income')
+        .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+      const monthlyExpenses = recentTransactions
+        .filter(t => t.type === 'expense')
+        .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+
+      const context: UserContext = {
+        user: createSafeUser(user),
+        accounts,
+        recentTransactions,
+        balanceHistory,
+        currentBalance,
+        monthlyIncome,
+        monthlyExpenses
+      };
+
+      // Generate AI response using Gemini
+      const aiResponse = await geminiService.generateResponse(message, context);
+
+      // Store chat message in database
+      const chatMessage = await storage.createChatMessage({
+        userId,
+        message,
+        response: aiResponse.message,
+        context: { sessionId, userBalance: currentBalance },
+        sessionId: sessionId || Math.random().toString(36).substring(2, 15)
+      });
+
+      res.json({
+        id: chatMessage.id,
+        message: aiResponse.message,
+        suggestions: aiResponse.suggestions,
+        actions: aiResponse.actions,
+        sessionId: chatMessage.sessionId,
+        timestamp: chatMessage.createdAt
+      });
+
+    } catch (error) {
+      console.error("AI chat error:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: "Invalid message format",
+          details: error.errors.map(e => e.message)
+        });
+      }
+      res.status(500).json({ error: "AI assistant temporarily unavailable" });
+    }
+  });
+
+  // Get chat history
+  app.get("/api/imisi/history", isAuthenticated, async (req: AuthenticatedRequest, res) => {
+    try {
+      const userId = req.userId!;
+      const limit = parseInt(req.query.limit as string) || 20;
+      
+      const chatHistory = await storage.getChatMessages(userId, limit);
+      
+      res.json({
+        messages: chatHistory.map(msg => ({
+          id: msg.id,
+          message: msg.message,
+          response: msg.response,
+          sessionId: msg.sessionId,
+          timestamp: msg.createdAt
+        }))
+      });
+
+    } catch (error) {
+      console.error("Chat history error:", error);
+      res.status(500).json({ error: "Failed to retrieve chat history" });
+    }
+  });
+
+  // Get proactive AI suggestions
+  app.get("/api/imisi/suggestions", isAuthenticated, async (req: AuthenticatedRequest, res) => {
+    try {
+      const userId = req.userId!;
+
+      // Build user context for proactive suggestions
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const [accounts, recentTransactions, balanceHistory] = await Promise.all([
+        storage.getAccountsByUserId(userId),
+        storage.getRecentTransactions(userId, 5),
+        storage.getBalanceHistory(userId)
+      ]);
+
+      const currentBalance = accounts.reduce((sum, acc) => sum + parseFloat(acc.balance || "0"), 0);
+      const monthlyIncome = recentTransactions
+        .filter(t => t.type === 'income')
+        .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+      const monthlyExpenses = recentTransactions
+        .filter(t => t.type === 'expense')
+        .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+
+      const context: UserContext = {
+        user: createSafeUser(user),
+        accounts,
+        recentTransactions,
+        balanceHistory,
+        currentBalance,
+        monthlyIncome,
+        monthlyExpenses
+      };
+
+      const proactivePrompt = await geminiService.generateProactivePrompt(context);
+
+      res.json({
+        suggestion: proactivePrompt,
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error) {
+      console.error("Proactive suggestions error:", error);
+      res.status(500).json({ error: "Failed to generate suggestions" });
+    }
+  });
+
+  // Save AI assistant context/preferences
+  app.post("/api/imisi/context", isAuthenticated, async (req: AuthenticatedRequest, res) => {
+    try {
+      const userId = req.userId!;
+      const { contextType, contextData, priority = 0 } = req.body;
+
+      if (!contextType || !contextData) {
+        return res.status(400).json({ error: "Context type and data are required" });
+      }
+
+      const context = await storage.createAIAssistantContext({
+        userId,
+        contextType,
+        contextData,
+        priority,
+        isActive: true
+      });
+
+      res.json({
+        id: context.id,
+        contextType: context.contextType,
+        priority: context.priority,
+        timestamp: context.createdAt
+      });
+
+    } catch (error) {
+      console.error("Save AI context error:", error);
+      res.status(500).json({ error: "Failed to save AI context" });
     }
   });
 
