@@ -3,6 +3,10 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
+
+// Configure Express for proper proxy support in Replit environment
+app.set('trust proxy', true);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 

@@ -80,6 +80,9 @@ export const authRateLimit = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  trustProxy: true,
+  skipSuccessfulRequests: false,
+  skipFailedRequests: false,
   handler: (req, res) => {
     SecurityLogger.logSecurityEvent(
       'Rate limit exceeded for authentication endpoint',
@@ -104,6 +107,8 @@ export const generalRateLimit = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  trustProxy: true,
+  skipSuccessfulRequests: true,
 });
 
 // Input sanitization function
