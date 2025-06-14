@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Sidebar } from "@/components/sidebar";
 import { BalanceChart } from "@/components/balance-chart";
 import { TransactionList } from "@/components/transaction-list";
+import { ImisiChatHead } from "@/components/imisi-chat";
 import { Bell, Wallet, TrendingUp, TrendingDown, PiggyBank } from "lucide-react";
 import { getQueryFn } from "@/lib/queryClient";
 
@@ -323,6 +324,9 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+      
+      {/* Imisi 2.0 AI Assistant */}
+      <ImisiChatHead />
     </div>
   );
 }
