@@ -4,6 +4,8 @@ import {
   transactions, 
   balanceHistory, 
   userAuditLogs,
+  chatMessages,
+  aiAssistantContext,
   type User, 
   type SafeUser,
   type InsertUser,
@@ -12,7 +14,11 @@ import {
   type Transaction,
   type InsertTransaction,
   type BalanceHistory,
-  type UserAuditLog
+  type UserAuditLog,
+  type ChatMessage,
+  type InsertChatMessage,
+  type AIAssistantContext,
+  type InsertAIAssistantContext
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and } from "drizzle-orm";
@@ -42,6 +48,13 @@ export interface IStorage {
   
   // Audit logging
   createAuditLog(auditLog: Omit<UserAuditLog, 'id' | 'createdAt'>): Promise<UserAuditLog>;
+  
+  // Chat and AI assistant methods
+  getChatMessages(userId: number, limit?: number): Promise<ChatMessage[]>;
+  createChatMessage(chatMessage: Omit<InsertChatMessage, 'id' | 'createdAt'> & { userId: number }): Promise<ChatMessage>;
+  getAIAssistantContext(userId: number, contextType?: string): Promise<AIAssistantContext[]>;
+  createAIAssistantContext(context: Omit<InsertAIAssistantContext, 'id' | 'createdAt' | 'updatedAt'> & { userId: number }): Promise<AIAssistantContext>;
+  updateAIAssistantContext(id: number, updates: Partial<AIAssistantContext>): Promise<AIAssistantContext>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -160,6 +173,54 @@ export class DatabaseStorage implements IStorage {
       .values(auditLog)
       .returning();
     return log;
+  }
+
+  // Chat and AI assistant methods
+  async getChatMessages(userId: number, limit: number = 50): Promise<ChatMessage[]> {
+    return await db
+      .select()
+      .from(chatMessages)
+      .where(eq(chatMessages.userId, userId))
+      .orderBy(desc(chatMessages.createdAt))
+      .limit(limit);
+  }
+
+  async createChatMessage(chatMessage: Omit<InsertChatMessage, 'id' | 'createdAt'> & { userId: number }): Promise<ChatMessage> {
+    const [message] = await db
+      .insert(chatMessages)
+      .values(chatMessage)
+      .returning();
+    return message;
+  }
+
+  async getAIAssistantContext(userId: number, contextType?: string): Promise<AIAssistantContext[]> {
+    const conditions = [eq(aiAssistantContext.userId, userId), eq(aiAssistantContext.isActive, true)];
+    if (contextType) {
+      conditions.push(eq(aiAssistantContext.contextType, contextType));
+    }
+    
+    return await db
+      .select()
+      .from(aiAssistantContext)
+      .where(and(...conditions))
+      .orderBy(desc(aiAssistantContext.priority), desc(aiAssistantContext.createdAt));
+  }
+
+  async createAIAssistantContext(context: Omit<InsertAIAssistantContext, 'id' | 'createdAt' | 'updatedAt'> & { userId: number }): Promise<AIAssistantContext> {
+    const [newContext] = await db
+      .insert(aiAssistantContext)
+      .values(context)
+      .returning();
+    return newContext;
+  }
+
+  async updateAIAssistantContext(id: number, updates: Partial<AIAssistantContext>): Promise<AIAssistantContext> {
+    const [updatedContext] = await db
+      .update(aiAssistantContext)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(aiAssistantContext.id, id))
+      .returning();
+    return updatedContext;
   }
 }
 
