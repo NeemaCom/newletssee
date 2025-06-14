@@ -1,0 +1,45 @@
+Seamlessly embed Imisi 2.0 (our AI-powered migration chatbot helper, powered by Gemini) directly into the platform, evolving it into a personalized AI personal assistant providing real-time assistance, proactive guidance, and information to users, akin to a digital concierge.
+
+Core Requirements:
+Backend AI Proxy (Personalized AI Assistant Core):
+
+Implement a secure backend API endpoint (POST /api/imisi/chat or a more generic /api/ai-assistant) to proxy user requests to the Gemini API.
+
+Ensure the API call includes rich and relevant user context (e.g., user ID, recent transactions, wallet balances, immigration case status, personal preferences, stored housing data, and historical interactions – fetched from storage via the authenticated user ID) to enable deeply personalized, proactive, and concierge-like responses from Imisi 2.0.
+
+Handle streaming or non-streaming responses from the Gemini API and relay them to the frontend.
+
+Implement robust rate limiting on this endpoint to prevent AI API abuse and manage costs.
+
+(New) Design the backend to support potential future integrations with specialized AI tools (e.g., for document analysis, form filling assistance) if the AI assistant is to act as an orchestrator.
+
+Frontend AI Assistant Interface:
+
+Design and implement an intuitive, responsive, and dynamic AI assistant UI on the frontend, moving beyond a simple chat window to a more interactive and visually engaging interface.
+
+Integrate the AI assistant UI at all key user journey points (e.g., dashboard, immigration services page, financial management, housing section), making it readily accessible as a central helper.
+
+Allow users to input text queries, and potentially voice queries (future phase), and display AI responses in real-time, including rich content formats (e.g., links, embedded forms/suggestions for next steps).
+
+(New) Implement proactive prompts or suggestions from the AI assistant based on user context or current tasks (e.g., "It looks like your visa interview is next week, would you like tips?").
+
+(New) Introduce an animated, persistent chat head for Imisi. This small, interactive visual element should be consistently present across the platform, acting as an unobtrusive, friendly entry point to the AI assistant. It should have subtle animations to indicate activity (e.g., listening, typing, new notification) and be clickable to expand the full chat interface.
+
+Conversation & Personalization History Management:
+
+Design a robust database schema for ChatMessage and potentially AIAssistantContext to store comprehensive conversation history and personalized context for each user. This is critical for continuity, learning, and enabling the AI to act as a truly "personal" assistant.
+
+Implement APIs for saving chat messages (createChatMessage) and retrieving historical messages (getUserChatMessages), ensuring efficient access for the AI context.
+
+(New) Explore mechanisms for the AI to "remember" previous advice given or tasks assisted with.
+
+Expected Deliverables:
+backend/src/db/schema.ts: Updated Drizzle schema for ChatMessage model and potentially a new AIAssistantContext model.
+
+backend/src/types/index.ts: Definitive TypeScript interface for ChatMessage and AIAssistantContext.
+
+backend/src/gemini-service.ts (new file): Encapsulates API calls to the Gemini API (getImmigrationAssistance), now potentially enhanced to handle richer context and diverse response types for the assistant.
+
+backend/src/routes.ts: (Or new dedicated AI routes file) Implementation of the enhanced /api/imisi/chat (or /api/ai-assistant) endpoint.
+
+Frontend (Conceptual): Notes on React components for the more advanced AI assistant interface, including input, dynamic message display, proactive suggestion mechanisms, integration points across the platform, and the animated chat head component.
