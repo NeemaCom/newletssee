@@ -8,7 +8,6 @@ import {
   Wallet, 
   Settings, 
   LogOut,
-  Crown,
   MessageCircle,
   Users,
   CreditCard,
@@ -35,7 +34,7 @@ const sidebarItems = [
   { icon: Settings, label: "Settings", href: "/settings" },
 ];
 
-export function Sidebar() {
+export function SimpleSidebar() {
   const [location, navigate] = useLocation();
 
   const { data: subscriptionStatus } = useQuery<{ hasActiveSubscription: boolean; status: string }>({
