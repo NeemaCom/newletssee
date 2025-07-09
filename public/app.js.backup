@@ -2690,38 +2690,39 @@ function Dashboard({ user }) {
                       e('p', { key: 'trans-2-desc', className: 'text-sm font-medium text-gray-900' }, 'Salary Deposit'),
                       e('p', { key: 'trans-2-time', className: 'text-xs text-gray-500' }, '1 day ago')
                     ])
-                ]),
-                e('div', { key: 'trans-2-right', className: 'text-right' }, [
+                  ]),
+                  e('div', { key: 'trans-2-right', className: 'text-right' }, [
                     e('p', { key: 'trans-2-amount', className: 'text-sm font-medium text-green-600' }, '+£2,800.00'),
                     e('p', { key: 'trans-2-category', className: 'text-xs text-gray-500' }, 'Income')
                   ])
-              ]),
-              // Transaction 3
-              e('div', { key: 'trans-3', className: 'flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors' }, [
-                e('div', { key: 'trans-3-left', className: 'flex items-center gap-3' }, [
-                  e('div', { key: 'trans-3-icon', className: 'w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center' }, '🚌'),
-                  e('div', { key: 'trans-3-info' }, [
-                    e('p', { key: 'trans-3-desc', className: 'text-sm font-medium text-gray-900' }, 'TfL Travel'),
-                    e('p', { key: 'trans-3-time', className: 'text-xs text-gray-500' }, '2 days ago')
+                ]),
+                // Transaction 3
+                e('div', { key: 'trans-3', className: 'flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors' }, [
+                  e('div', { key: 'trans-3-left', className: 'flex items-center gap-3' }, [
+                    e('div', { key: 'trans-3-icon', className: 'w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center' }, '🚌'),
+                    e('div', { key: 'trans-3-info' }, [
+                      e('p', { key: 'trans-3-desc', className: 'text-sm font-medium text-gray-900' }, 'TfL Travel'),
+                      e('p', { key: 'trans-3-time', className: 'text-xs text-gray-500' }, '2 days ago')
+                    ])
+                  ]),
+                  e('div', { key: 'trans-3-right', className: 'text-right' }, [
+                    e('p', { key: 'trans-3-amount', className: 'text-sm font-medium text-red-600' }, '-£12.50'),
+                    e('p', { key: 'trans-3-category', className: 'text-xs text-gray-500' }, 'Transport')
                   ])
                 ]),
-                e('div', { key: 'trans-3-right', className: 'text-right' }, [
-                  e('p', { key: 'trans-3-amount', className: 'text-sm font-medium text-red-600' }, '-£12.50'),
-                  e('p', { key: 'trans-3-category', className: 'text-xs text-gray-500' }, 'Transport')
-                ])
-              ]),
-              // Transaction 4
-              e('div', { key: 'trans-4', className: 'flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors' }, [
-                e('div', { key: 'trans-4-left', className: 'flex items-center gap-3' }, [
-                  e('div', { key: 'trans-4-icon', className: 'w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center' }, '🛍️'),
-                  e('div', { key: 'trans-4-info' }, [
-                    e('p', { key: 'trans-4-desc', className: 'text-sm font-medium text-gray-900' }, 'Amazon Purchase'),
-                    e('p', { key: 'trans-4-time', className: 'text-xs text-gray-500' }, '3 days ago')
+                // Transaction 4
+                e('div', { key: 'trans-4', className: 'flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors' }, [
+                  e('div', { key: 'trans-4-left', className: 'flex items-center gap-3' }, [
+                    e('div', { key: 'trans-4-icon', className: 'w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center' }, '🛍️'),
+                    e('div', { key: 'trans-4-info' }, [
+                      e('p', { key: 'trans-4-desc', className: 'text-sm font-medium text-gray-900' }, 'Amazon Purchase'),
+                      e('p', { key: 'trans-4-time', className: 'text-xs text-gray-500' }, '3 days ago')
+                    ])
+                  ]),
+                  e('div', { key: 'trans-4-right', className: 'text-right' }, [
+                    e('p', { key: 'trans-4-amount', className: 'text-sm font-medium text-red-600' }, '-£67.99'),
+                    e('p', { key: 'trans-4-category', className: 'text-xs text-gray-500' }, 'Shopping')
                   ])
-                ]),
-                e('div', { key: 'trans-4-right', className: 'text-right' }, [
-                  e('p', { key: 'trans-4-amount', className: 'text-sm font-medium text-red-600' }, '-£67.99'),
-                  e('p', { key: 'trans-4-category', className: 'text-xs text-gray-500' }, 'Shopping')
                 ])
               ])
             ])
